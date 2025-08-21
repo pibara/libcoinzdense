@@ -25,7 +25,7 @@ namespace coinzdense {
 	        mUpSeed(up_seed), mDownSeed(down_seed), mSalt(salt) {}
 	//callable operation
         std::array<uint8_t, 2*S>  operator () (uint32_t index){
-	    if (index >= (1 << D)) {
+	    if (index > (1 << D)) {
                 throw std::out_of_range("WotsChainPair index out of range.");
 	    } 
 	    // two working buffers
@@ -35,7 +35,8 @@ namespace coinzdense {
 	    memcpy(temp_in, mUpSeed.data(), S);
 	    memcpy(temp_in+S, mDownSeed.data(), S);
 	    // the second chain uses the reverse index as a more secure alternative to a single chain with CRC
-	    uint32_t rindex = (1 << D) - index;
+	    // NOTE: the invalid index (1 << D) is used to calculate the partial OTS public key instead of a partial signature. 
+	    uint32_t rindex = (index < (1 << D)) ?  (1 << D) - index : index;
 	    // Find the min and the max of the two indices
             uint32_t mindex = (rindex > index) ? index : rindex;
 	    uint32_t maxdex = (rindex > index) ? rindex : index;
