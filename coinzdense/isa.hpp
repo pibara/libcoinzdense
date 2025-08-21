@@ -1,3 +1,4 @@
+#pragma once
 #include <cstdint>
 #include <cmath>
 // Top namespace for the coinzdense library
