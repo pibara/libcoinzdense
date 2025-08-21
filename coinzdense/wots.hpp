@@ -4,20 +4,30 @@
 #include <memory>
 #include "value.hpp"
 namespace coinzdense {
+  namespace sodium {
+    struct GenericHashException : std::runtime_error {
+      GenericHashException(const std::string& message): std::runtime_error("Generic hash failed : " + message) {}
+    };
+  }
   namespace wots {
     template<std::uint64_t S>
     struct AbstractWotsChainPair {
       virtual ~AbstractWotsChainPair() = default;
       virtual std::array<uint8_t, 2*S> operator () (uint32_t index) = 0;
     };
-     template<std::uint64_t D, std::uint64_t S>
+    template<std::uint64_t D, std::uint64_t S>
     // dual chain wots primitive
     struct WotsChainPair: AbstractWotsChainPair<S> {
+	static_assert(D >= 4 && D <= 16, "Depthbits must be in the range 4 to 16");
+	static_assert(S >= 20 && S <= crypto_kdf_BYTES_MAX, "Subkey size must be 20 up to crypto_kdf_BYTES_MAX bytes");
 	//constructor
         WotsChainPair(std::array<uint8_t, S> up_seed, std::array<uint8_t, S> down_seed, std::array<uint8_t, S> salt):
 	        mUpSeed(up_seed), mDownSeed(down_seed), mSalt(salt) {}
 	//callable operation
         std::array<uint8_t, 2*S>  operator () (uint32_t index){
+	    if (index >= (1 << D)) {
+                throw std::out_of_range("WotsChainPair index out of range.");
+	    } 
 	    // two working buffers
             unsigned char temp_in[2*S];
 	    unsigned char temp_out[2*S];
@@ -33,18 +43,28 @@ namespace coinzdense {
 	    uint32_t offset = (rindex > index) ? S : 0;
 	    // Do the shared bit for both chains
 	    for (unsigned int i = 0; i < mindex; i++) {
-              crypto_generichash(temp_out, S, temp_in, S, mSalt.data(), S);
-	      crypto_generichash(temp_out+S, S, temp_in+S, S, mSalt.data(), S);
+              if (crypto_generichash(temp_out, S, temp_in, S, mSalt.data(), S) == -1) {
+                throw coinzdense::sodium::GenericHashException("Invalid parameters or system error");
+	      }
+	      if (crypto_generichash(temp_out+S, S, temp_in+S, S, mSalt.data(), S) == -1) {
+                throw coinzdense::sodium::GenericHashException("Invalid parameters or system error");
+	      }
 	      memcpy(temp_in, temp_out, S*2);
 	    }
 	    // Complete the longer chain
 	    for (unsigned int i = mindex; i < maxdex; i++) {
-              crypto_generichash(temp_out+offset, S, temp_in+offset, S, mSalt.data(), S);
+              if (crypto_generichash(temp_out+offset, S, temp_in+offset, S, mSalt.data(), S)==-1) {
+                throw coinzdense::sodium::GenericHashException("Invalid parameters or system error");
+	      }
 	      memcpy(temp_in+offset, temp_out+offset, S);
 	    }
-	    // One extra hashing round in case one of tha chains had zero rounds
-	    crypto_generichash(temp_out, S, temp_in, S, mSalt.data(), S);
-            crypto_generichash(temp_out+S, S, temp_in+S, S, mSalt.data(), S);
+	    // One extra hashing because we are 1 based, not 0 based in indexing, we need at least one hashing round.
+	    if (crypto_generichash(temp_out, S, temp_in, S, mSalt.data(), S) == -1) {
+              throw coinzdense::sodium::GenericHashException("Invalid parameters or system error");
+	    }
+            if (crypto_generichash(temp_out+S, S, temp_in+S, S, mSalt.data(), S) == -1) {
+              throw coinzdense::sodium::GenericHashException("Invalid parameters or system error");
+	    }
 	    // Return partial signature as concatted array.
             return std::to_array(temp_out);
         }
