@@ -3,6 +3,7 @@
 #include <string>
 #include "coinzdense/isa.hpp"
 #include "coinzdense/entropy.hpp"
+#include "coinzdense/keyspace.hpp"
 #include "coinzdense/wots.hpp"
 
 
@@ -23,6 +24,25 @@ int main() {
     try {
       auto sub3b = range2(110);
       throw std::runtime_error("Failure in second range test");
+    }
+    catch (std::out_of_range const &e) {
+    }
+    coinzdense::keyspace::full_keyspace<20, 6, 16, 6, 6, 6> full_entropy(entropy);
+    auto mainkey_entropy = full_entropy.mainkey_keyspace();
+    auto unallocated_entropy = full_entropy.unallocated_keyspace();
+    auto sub4 = mainkey_entropy(123456);
+    try {
+        auto sub4b = mainkey_entropy(17600000);
+	throw std::runtime_error("Failure in third range test");
+    }
+    catch (std::out_of_range const &e) {
+    }
+    auto sub5 = unallocated_entropy(123456);
+    auto l0_entropy = full_entropy.l0_keyspace();
+    auto sub6 = l0_entropy(4224);
+    try {
+        auto sub6b = l0_entropy(5000);
+	throw std::runtime_error("Failure in 4th range test");
     }
     catch (std::out_of_range const &e) {
     }
